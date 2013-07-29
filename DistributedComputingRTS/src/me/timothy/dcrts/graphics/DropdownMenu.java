@@ -1,9 +1,11 @@
 package me.timothy.dcrts.graphics;
 
 import java.awt.Point;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import me.timothy.dcrts.ResourceManager;
 import me.timothy.dcrts.net.event.CEventHandler;
 import me.timothy.dcrts.net.event.CEventManager;
 import me.timothy.dcrts.net.event.EventType;
@@ -11,8 +13,10 @@ import me.timothy.dcrts.utils.GUtils;
 
 import org.lwjgl.input.Mouse;
 import org.newdawn.slick.Color;
+import org.newdawn.slick.Font;
 import org.newdawn.slick.GameContainer;
 import org.newdawn.slick.Graphics;
+import org.newdawn.slick.Image;
 import org.newdawn.slick.geom.Rectangle;
 
 /**
@@ -37,7 +41,7 @@ public class DropdownMenu {
 	private Color textDisabled;
 	private Color highlight;
 	private Color pressHighlight;
-	private List<String> choices;
+	private List<Object> choices;
 	private List<Boolean> enabled;
 	private Point location;
 
@@ -47,6 +51,9 @@ public class DropdownMenu {
 	private int heightPerRow;
 	
 	private Rectangle[] lastRenders;
+	
+	private List<Object> currentDisplay;
+	private long lastPress;
 	
 	/**
 	 * Creates a dropdown menu
@@ -66,7 +73,7 @@ public class DropdownMenu {
 	 * @param text the color of the text
 	 * @param textDisabled the color of disabled text
 	 */
-	public DropdownMenu(List<String> choices, List<Boolean> enabled, Point location,
+	public DropdownMenu(List<Object> choices, List<Boolean> enabled, Point location,
 			Color background, Color highlight, Color pressHighlight,
 			Color lines, Color text, Color textDisabled) {
 		CEventManager.instance.register(this);
@@ -80,10 +87,13 @@ public class DropdownMenu {
 		this.text = text;
 		this.textDisabled = textDisabled;
 		
+		this.currentDisplay = choices;
+		
 		lastRenders = new Rectangle[choices.size()];
-		width = 100;
+		width = -1;
 		heightPerRow = 50;
 	}
+	
 	/**
 	 * Creates a dropdown menu
 	 * 
@@ -96,7 +106,7 @@ public class DropdownMenu {
 	 * 		This will end up being somewhere on the edge of the dropdown
 	 * 		menu, with a best-effort for it being on the top-left
 	 */
-	public DropdownMenu(List<String> choices, List<Boolean> enabled, Point location) {
+	public DropdownMenu(List<Object> choices, List<Boolean> enabled, Point location) {
 		this(	choices, 
 				enabled,
 				location, 
@@ -121,6 +131,17 @@ public class DropdownMenu {
 	public void render(GameContainer container, Graphics graphics) {
 		if(destroyed)
 			throw new IllegalArgumentException("This dropdown menu has been destroyed!");
+		
+		if(width == -1) {
+			Font font = graphics.getFont();
+			int maxWidth = -1;
+			for(Object obj : currentDisplay) {
+				if(getWidth(font, obj) > maxWidth)
+					maxWidth = getWidth(font, obj);
+			}
+			width = maxWidth + 6;
+		}
+		
 		int topLeftX = location.x;
 		int topLeftY = location.y;
 		
@@ -141,7 +162,7 @@ public class DropdownMenu {
 		
 		graphics.setColor(lines);
 		int y = topLeftY;
-		for(int i = 0; i < choices.size(); i++) {
+		for(int i = 0; i < currentDisplay.size(); i++) {
 			lastRenders[i] = new Rectangle(topLeftX, y, getWidth(), heightPerRow);
 			if(isHighlighted(i)) {
 				if(!Mouse.isButtonDown(0)) // update method will handle the actual press
@@ -158,15 +179,51 @@ public class DropdownMenu {
 		
 		// draw choices
 		
-		for(int i = 0; i < choices.size(); i++) {
+		for(int i = 0; i < currentDisplay.size(); i++) {
 			if(enabled.get(i))
 				graphics.setColor(text);
 			else
 				graphics.setColor(textDisabled);
-			GUtils.drawCenteredInRect(graphics, text, choices.get(i), lastRenders[i]);
+			
+			Object toDisp = currentDisplay.get(i);
+			display(graphics, toDisp, lastRenders[i]);
 		}
 		
 		graphics.setColor(old);
+	}
+	
+	private void display(Graphics graphics, Object toDisp, Rectangle rect) {
+		if(toDisp instanceof List<?>) {
+			List<?> asList = (List<?>) toDisp;
+			if(asList.size() < 1) {
+				throw new IllegalArgumentException("Empty list passed as object to display parameters in dropdown menu");
+			}
+			
+			String str = asList.get(0).toString();
+			GUtils.drawCenteredInRect(graphics, text, str, rect);
+			Image img = ResourceManager.getResource("right-arrow.png");
+			
+			float x = (rect.getX() + rect.getWidth()) - (img.getWidth() + 1);
+			float y = rect.getY() + rect.getHeight() - img.getHeight();
+			img.draw(x, y);
+		}else {
+			GUtils.drawCenteredInRect(graphics, text, toDisp.toString(), rect);
+		}
+	}
+	
+	private int getWidth(Font font, Object toDisp) {
+		if(toDisp instanceof List<?>) {
+			List<?> asList = (List<?>) toDisp;
+			if(asList.size() < 1) {
+				throw new IllegalArgumentException("Empty list passed as object to display parameters in dropdown menu");
+			}
+			
+			String str = asList.get(0).toString();
+			Image img = ResourceManager.getResource("right-arrow.png");
+			return img.getWidth() + font.getWidth(str);
+		}else {
+			return font.getWidth(toDisp.toString()); 
+		}
 	}
 	
 	/**
@@ -183,13 +240,24 @@ public class DropdownMenu {
 		if(lastRenders[0] == null)
 			return;
 		
-		if(!Mouse.isButtonDown(0))
+		if(!Mouse.isButtonDown(0) || (System.currentTimeMillis() - lastPress) < 300)
 			return;
 		
 		for(int i = 0; i < lastRenders.length; i++) {
 			if(isHighlighted(i)) {
-				CEventManager.instance.broadcast(EventType.DROPDOWN_MENU_CHOICE, this, choices.get(i), i);
-				CEventManager.instance.broadcast(EventType.MENUS_DESTROYED); // TODO check if we're opening a new menu
+				Object obj = currentDisplay.get(i);
+				if(obj instanceof List<?>) {
+					List<?> tmpList = (List<?>) obj;
+					currentDisplay = new ArrayList<Object>();
+					for(int j = 1; j < tmpList.size(); j++) {
+						currentDisplay.add(tmpList.get(j));
+					}
+					lastRenders = new Rectangle[currentDisplay.size()];
+					lastPress = System.currentTimeMillis();
+					return;
+				}
+				CEventManager.instance.broadcast(EventType.DROPDOWN_MENU_CHOICE, this, currentDisplay.get(i), i);
+				CEventManager.instance.broadcast(EventType.MENUS_DESTROYED);
 			}
 		}
 	}
@@ -199,7 +267,7 @@ public class DropdownMenu {
 	}
 	
 	public int getHeight() {
-		return choices.size() * heightPerRow;
+		return currentDisplay.size() * heightPerRow;
 	}
 	
 	// Utility methods

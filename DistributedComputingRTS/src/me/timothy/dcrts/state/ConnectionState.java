@@ -111,13 +111,16 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 		Math.PI / 4, // four people
 	};
 
-	protected static final List<String> DROPDOWN_CHOICES;
+	protected static final List<Object> DROPDOWN_CHOICES;
 	
 	static {
-		DROPDOWN_CHOICES = Arrays.asList(
-				"Promote",
-				"Demote"
-				);
+		DROPDOWN_CHOICES = Arrays.asList(new Object[] {
+				Arrays.asList(
+						"Change Module",
+						"Promote",
+						"Demote"
+				)
+			});
 	}
 	
 	protected ConnectingHandler cHandler;

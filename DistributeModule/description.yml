@@ -1,7 +1,0 @@
-main: me.timothy.modules.distribute.DistributeModule
-name: DistributeModule
-type: logic
-cost: 3
-description: |
-  Decides which peers get which type of module. Kind
-  of like the incorrect definition of module-ception.

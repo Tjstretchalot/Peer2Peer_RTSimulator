@@ -3,8 +3,13 @@ package me.timothy.modules.listener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.List;
 
 import me.timothy.dcrts.net.NetModule;
+import me.timothy.dcrts.net.packets.ChangeModulePacket;
+import me.timothy.dcrts.packet.PacketHandler;
+import me.timothy.dcrts.packet.PacketHeader;
+import me.timothy.dcrts.packet.ParsedPacket;
 import me.timothy.dcrts.peer.Peer;
 import me.timothy.dcrts.utils.ErrorUtils;
 
@@ -25,9 +30,10 @@ public class ListenerModule extends NetModule {
 					gameState, (gameState != null ? gameState.getConnectedPeers() : null));
 		}
 		
-		reallyConnected = gameState.getConnectedPeers().get(0);
+		reallyConnected = netState.getPeersWithNetModule("BroadcastModule").get(0);
 		readThread = new ReadThread(this, netState.getSocketChannelOf(reallyConnected));
 		readThread.start();
+		pManager.registerClass(this);
 
 		System.out.println("ListenerModule Activated");
 	}
@@ -36,6 +42,7 @@ public class ListenerModule extends NetModule {
 	public void onDeactivate() {
 		readThread.stopGracefully();
 
+		pManager.unregisterClass(this);
 		System.out.println("ListenerModule Deactivated");
 	}
 
@@ -46,4 +53,19 @@ public class ListenerModule extends NetModule {
 		sc.write(buffer);
 	}
 
+	@PacketHandler(header=PacketHeader.CHANGE_MODULE, priority=10)
+	public void onChangeModule(Peer peer, ParsedPacket packet) {
+			if(!peer.equals(reallyConnected))
+				return;
+			
+			// oh man oh man oh man
+			ChangeModulePacket cmp = (ChangeModulePacket) packet;
+			if(cmp.isNetModule() && !cmp.getModule().equals("BroadcastModule")) {
+				List<Peer> broadcasters = netState.getPeersWithNetModule("BroadcastModule");
+				if(broadcasters.size() == 0) {
+					throw new IllegalArgumentException("No broadcasters to really be connected to!");
+				}
+				reallyConnected = broadcasters.get(0);
+			}
+	}
 }

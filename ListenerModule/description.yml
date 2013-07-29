@@ -1,0 +1,11 @@
+main: me.timothy.modules.listener.ListenerModule
+type: net
+name: ListenerModule
+cost: 1
+description: |
+  Handles incoming and outgoing requests appropriately, but does not
+  do anything fancy (like talk to a specific peer).
+  
+  In essence, just sends requests to the host and recieves events from 
+  the host. Not all packets are meant to be implemented, as this is a
+  temporary measure to ensure synchronization

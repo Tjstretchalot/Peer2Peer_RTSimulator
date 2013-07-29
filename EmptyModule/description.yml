@@ -1,0 +1,5 @@
+main: me.timothy.modules.empty.EmptyModule
+type: logic
+name: EmptyModule
+cost: 0
+description: Does nothing

@@ -1,0 +1,9 @@
+main: me.timothy.modules.broadcast.BroadcastModule
+name: BroadcastModule
+type: net
+cost: 6
+description: |
+  Used as a broadcaster to peers, depending on the number of other
+  broadcast modules. Fairly complicated in that it only sends to peers that
+  are directly connected with the broadcast module, as well as other
+  broadcast modules.

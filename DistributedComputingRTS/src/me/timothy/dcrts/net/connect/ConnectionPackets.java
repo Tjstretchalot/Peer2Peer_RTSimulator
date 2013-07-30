@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 
 import me.timothy.dcrts.net.module.ModuleHandler;
 import me.timothy.dcrts.net.packets.ChangeModulePacket;
+import me.timothy.dcrts.net.packets.WhisperPacket;
 import me.timothy.dcrts.packet.PacketHeader;
 import me.timothy.dcrts.packet.PacketListener;
 import me.timothy.dcrts.packet.PacketManager;
@@ -36,8 +37,10 @@ public class ConnectionPackets implements PacketListener {
 		
 		PacketManager pm = PacketManager.instance;
 		pm.registerPacketParser(instance, "parseChangeModule", PacketHeader.CHANGE_MODULE);
+		pm.registerPacketParser(instance, "parseWhisper", PacketHeader.WHISPER);
 		
 		pm.registerPacketSender(instance, "createChangeModule", PacketHeader.CHANGE_MODULE);
+		pm.registerPacketSender(instance, "createWhisper", PacketHeader.WHISPER);
 	}
 	
 	/**
@@ -86,5 +89,34 @@ public class ConnectionPackets implements PacketListener {
 		NetUtils.putString(buffer, module);
 		buffer.putInt(sha1Hash.length);
 		buffer.put(sha1Hash);
+	}
+	
+	/**
+	 * Parses a whisper packet, should not be called outside of the packet manager
+	 * @param header the header
+	 * @param buffer the buffer
+	 * @return the parsed packet
+	 */
+	public ParsedPacket parseWhisper(PacketHeader header, ByteBuffer buffer) {
+		int pId = buffer.getInt();
+		int msgLen = buffer.getInt();
+		String msg = NetUtils.readString(buffer, msgLen);
+		
+		return new WhisperPacket(pId, msg);
+	}
+	
+	/**
+	 * Writes a whisper packet, should not be called outside of the packet manager
+	 * @param buffer the buffer
+	 * @param arguments Length 2 (Peer that it is being sent to, message that is being sent)
+	 */
+	public void createWhisper(ByteBuffer buffer, Object... arguments) {
+		Peer peer = (Peer) arguments[0];
+		String msg = (String) arguments[1];
+		int len = msg.length();
+		
+		buffer.putInt(peer.getID());
+		buffer.putInt(len);
+		NetUtils.putString(buffer, msg);
 	}
 }

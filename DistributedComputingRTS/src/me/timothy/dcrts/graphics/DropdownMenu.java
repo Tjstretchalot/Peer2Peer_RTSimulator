@@ -3,7 +3,9 @@ package me.timothy.dcrts.graphics;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import me.timothy.dcrts.ResourceManager;
 import me.timothy.dcrts.net.event.CEventHandler;
@@ -42,7 +44,7 @@ public class DropdownMenu {
 	private Color highlight;
 	private Color pressHighlight;
 	private List<Object> choices;
-	private List<Boolean> enabled;
+	private EnableChecker enabledCheck;
 	private Point location;
 
 	private boolean destroyed;
@@ -55,6 +57,8 @@ public class DropdownMenu {
 	private List<Object> currentDisplay;
 	private long lastPress;
 	
+	private Map<String, Object> meta;
+	
 	/**
 	 * Creates a dropdown menu
 	 * 
@@ -63,9 +67,8 @@ public class DropdownMenu {
 	 * 		location where the dropdown menu was originally clicked from.
 	 * 		This will end up being somewhere on the edge of the dropdown
 	 * 		menu, with a best-effort for it being on the top-left
-	 * @param enabled 
-	 * 		a list of the same length as choices, each boolean saying whether
-	 * 		that choice is enabled
+	 * @param enabledCheck
+	 * 		Checks if the choices are enabled based on the metadata from this menu
 	 * @param background the color of the background of this dropdown. May be transparent
 	 * @param highlight the color when a mouse is hovering over a segment
 	 * @param pressHighlight the color when a mouse is pressed and hovering
@@ -73,12 +76,12 @@ public class DropdownMenu {
 	 * @param text the color of the text
 	 * @param textDisabled the color of disabled text
 	 */
-	public DropdownMenu(List<Object> choices, List<Boolean> enabled, Point location,
+	public DropdownMenu(List<Object> choices, EnableChecker enabledCheck, Point location,
 			Color background, Color highlight, Color pressHighlight,
 			Color lines, Color text, Color textDisabled) {
 		CEventManager.instance.register(this);
 		this.choices = choices;
-		this.enabled = enabled;
+		this.enabledCheck = enabledCheck;
 		this.location = location;
 		this.background = background;
 		this.highlight = highlight;
@@ -98,24 +101,23 @@ public class DropdownMenu {
 	 * Creates a dropdown menu
 	 * 
 	 * @param choices the list of choices
-	 * @param enabled 
-	 * 		a list of the same length as choices, each boolean saying whether
-	 * 		that choice is enabled
+	 * @param enabledCheck checks whether the objects are enabled. May use metadata
+	 * 			from getMeta to diagnose information
 	 * @param 
 	 * 		location where the dropdown menu was originally clicked from.
 	 * 		This will end up being somewhere on the edge of the dropdown
 	 * 		menu, with a best-effort for it being on the top-left
 	 */
-	public DropdownMenu(List<Object> choices, List<Boolean> enabled, Point location) {
+	public DropdownMenu(List<Object> choices, EnableChecker enabledCheck, Point location) {
 		this(	choices, 
-				enabled,
+				enabledCheck,
 				location, 
 				Color.white,
 				new Color(135, 206, 250), // lightish blue
 				new Color(30, 144, 255), // darker blue
 				Color.lightGray,
-				Color.gray,
-				Color.darkGray);
+				Color.darkGray,
+				Color.gray);
 	}
 	
 	/**
@@ -158,7 +160,6 @@ public class DropdownMenu {
 		graphics.setColor(background);
 		graphics.fillRect(topLeftX, topLeftY, getWidth(), getHeight());
 		
-		// draw lines
 		
 		graphics.setColor(lines);
 		int y = topLeftY;
@@ -180,7 +181,7 @@ public class DropdownMenu {
 		// draw choices
 		
 		for(int i = 0; i < currentDisplay.size(); i++) {
-			if(enabled.get(i))
+			if(enabledCheck.isEnabled(currentDisplay.get(i), getMeta()))
 				graphics.setColor(text);
 			else
 				graphics.setColor(textDisabled);
@@ -240,11 +241,12 @@ public class DropdownMenu {
 		if(lastRenders[0] == null)
 			return;
 		
-		if(!Mouse.isButtonDown(0) || (System.currentTimeMillis() - lastPress) < 300)
+		if(!Mouse.isButtonDown(0) || (System.currentTimeMillis() - lastPress) < 500)
 			return;
 		
 		for(int i = 0; i < lastRenders.length; i++) {
 			if(isHighlighted(i)) {
+				lastPress = System.currentTimeMillis();
 				Object obj = currentDisplay.get(i);
 				if(obj instanceof List<?>) {
 					List<?> tmpList = (List<?>) obj;
@@ -253,7 +255,6 @@ public class DropdownMenu {
 						currentDisplay.add(tmpList.get(j));
 					}
 					lastRenders = new Rectangle[currentDisplay.size()];
-					lastPress = System.currentTimeMillis();
 					return;
 				}
 				CEventManager.instance.broadcast(EventType.DROPDOWN_MENU_CHOICE, this, currentDisplay.get(i), i);
@@ -277,13 +278,23 @@ public class DropdownMenu {
 	}
 	
 	public boolean isHighlighted(int index) {
+		if(!enabledCheck.isEnabled(currentDisplay.get(index), getMeta()))
+			return false;
 		return lastRenders[index].contains(Mouse.getX(), GUtils.height - Mouse.getY());
+	}
+	
+	public Map<String, Object> getMeta() {
+		if(meta == null)
+			meta = new HashMap<>();
+		return meta;
 	}
 	
 	@CEventHandler(event=EventType.MENUS_DESTROYED)
 	public void onMenusDestroyed() {
 		destroy();
 	}
+	
+	
 	@Override
 	public int hashCode() {
 		final int prime = 31;

@@ -23,6 +23,43 @@ public abstract class NetModule extends Module {
 	 * @throws IOException if an i/o exception occurs
 	 */
 	public abstract void sendData(ByteBuffer buffer, Peer... except) throws IOException;
+
+	/**
+	 * Ensures there is a direct connection to the specified peer, regardless
+	 * if that peer is connected logically. This may be used to send secure
+	 * messages.
+	 * 
+	 * The peer then exchanges encryption keys to be utilized until the next call
+	 * to destroyUnnecessaryConnections() or destroyUnnecessaryConnection#Peer
+	 * @param peer the peer 
+	 */
+	public abstract void ensureDirectConnection(Peer peer) throws IOException;
+	/**
+	 * Sends a message directly to the specified peer. This must be 
+	 * preceded with ensureDirectConnection to avoid errors.
+	 * 
+	 * This will be encrypted
+	 * 
+	 * @param peer the peer
+	 */
+	public abstract void sendDirectly(Peer peer) throws IOException;
+	
+	/**
+	 * Destroys any unnecessary connections caused from ensureDirectConnection, and 
+	 * 'kills' encryption keys.
+	 * 
+	 * @throws IOException if an exception occurs
+	 */
+	public abstract void destroyUnnecessaryConnections() throws IOException;
+	
+	/**
+	 * Destroys a specific unnecessary connection caused from ensureDirectConnection,
+	 * and forgets the associated encryption key
+	 * 
+	 * @param peer the peer
+	 * @throws IOException if an exception occurs
+	 */
+	public abstract void destroyUnnecessaryConnection(Peer peer) throws IOException;
 	
 	/**
 	 * 

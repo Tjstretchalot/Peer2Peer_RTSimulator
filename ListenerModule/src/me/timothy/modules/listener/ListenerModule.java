@@ -66,6 +66,31 @@ public class ListenerModule extends NetModule {
 					throw new IllegalArgumentException("No broadcasters to really be connected to!");
 				}
 				reallyConnected = broadcasters.get(0);
+				System.out.println("Changing really connected peer!");
 			}
+	}
+
+	@Override
+	public void ensureDirectConnection(Peer peer) throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void sendDirectly(Peer peer) throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void destroyUnnecessaryConnections() throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void destroyUnnecessaryConnection(Peer peer) throws IOException {
+		// TODO Auto-generated method stub
+		
 	}
 }

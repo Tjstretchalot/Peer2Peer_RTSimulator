@@ -7,9 +7,13 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import javax.swing.JOptionPane;
 
 import me.timothy.dcrts.GameState;
 import me.timothy.dcrts.graphics.DropdownMenu;
+import me.timothy.dcrts.graphics.EnableChecker;
 import me.timothy.dcrts.net.LogicModule;
 import me.timothy.dcrts.net.NetModule;
 import me.timothy.dcrts.net.NetState;
@@ -43,7 +47,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 	 * Points should be based on a circle, R=120
 	 * @author Timothy
 	 */
-	protected class GraphPoint {
+	protected class GraphPoint implements EnableChecker {
 		protected Peer thePeer;
 		protected Point point;
 		protected List<GraphPoint> connected;
@@ -100,6 +104,33 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 			}
 			return true;
 		}
+		
+		@Override
+		public boolean isEnabled(Object obj, Map<String, Object> meta) {
+			if(obj instanceof String)
+				return isEnabled((String) obj, meta);
+			if(obj instanceof List<?>) {
+				String str = (String) ((List<?>) obj).get(0);
+				return isEnabled(str, meta);
+			}
+			return false;
+		}
+		
+		
+		public boolean isEnabled(String str, Map<String, Object> meta) {
+			switch(str) {
+			case "Change Module":
+				return true;
+			case "Promote":
+				return !cHandler.getNetState().getNetTypeOf(thePeer).getName().equals("BroadcastModule");
+			case "Demote":
+				return !cHandler.getNetState().getNetTypeOf(thePeer).getName().equals("ListenerModule");
+			case "Whisper":
+				return !cHandler.getGameState().getLocalPeer().equals(thePeer);
+			default:
+				return false;
+			}
+		}
 	}
 
 	public static final int ID = 4;
@@ -119,7 +150,8 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 						"Change Module",
 						"Promote",
 						"Demote"
-				)
+				),
+				"Whisper"
 			});
 	}
 	
@@ -180,7 +212,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 					Point effLoc = (Point) mouseHoveringOn.point.clone();
 					effLoc.x += 200;
 					effLoc.y += 120;
-					dropdownMenu = new DropdownMenu(DROPDOWN_CHOICES, decideDropdownChoices(mouseHoveringOn), 
+					dropdownMenu = new DropdownMenu(DROPDOWN_CHOICES, mouseHoveringOn, 
 							effLoc);
 				}
 				lastPress = System.currentTimeMillis();
@@ -363,6 +395,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 	
 	@CEventHandler(event=EventType.DROPDOWN_MENU_CHOICE)
 	public void dropdownMenuChoice(DropdownMenu menu, String optionStr, int optionInd) {
+		System.out.println("Dropdown Menu Choice: " + optionStr);
 		if(!enabled || !menu.equals(dropdownMenu)) {
 			return;
 		}
@@ -414,8 +447,24 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 
 			recalculateNodeGraph();
 			break;
+		case "Whisper":
+			if(peer.equals(cHandler.getNetState().getLocalPeer()))
+				break;
+			
+			
+			String msg = JOptionPane.showInputDialog("What do you want to send to " + peer.getName() + "?");
+			
+			ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.WHISPER);
+			PacketManager.instance.send(PacketHeader.WHISPER, buffer, peer, msg); // This is located in ConnectionPackets or whatever
+			try {
+				cHandler.getNetState().getLocalNetModule().ensureDirectConnection(peer);
+				cHandler.getNetState().getLocalNetModule().sendDirectly(peer);
+				cHandler.getNetState().getLocalNetModule().destroyUnnecessaryConnection(peer);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			break;
 		default:
-			System.out.println("Dropdown Menu Choice: " + optionStr);
 			break;
 		}
 	}

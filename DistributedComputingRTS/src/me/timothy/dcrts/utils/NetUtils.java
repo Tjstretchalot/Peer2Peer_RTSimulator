@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -72,6 +71,7 @@ public class NetUtils {
 	      md.update(dataBytes, 0, nread);
 	    };
 	 
+	    fis.close();
 		return md.digest();
 	}
 	

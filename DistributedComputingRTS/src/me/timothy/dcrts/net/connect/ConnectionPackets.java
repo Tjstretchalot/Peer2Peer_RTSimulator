@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 
 import me.timothy.dcrts.net.module.ModuleHandler;
 import me.timothy.dcrts.net.packets.ChangeModulePacket;
+import me.timothy.dcrts.net.packets.DestroyingChannelPacket;
 import me.timothy.dcrts.net.packets.WhisperPacket;
 import me.timothy.dcrts.packet.PacketHeader;
 import me.timothy.dcrts.packet.PacketListener;
@@ -38,9 +39,11 @@ public class ConnectionPackets implements PacketListener {
 		PacketManager pm = PacketManager.instance;
 		pm.registerPacketParser(instance, "parseChangeModule", PacketHeader.CHANGE_MODULE);
 		pm.registerPacketParser(instance, "parseWhisper", PacketHeader.WHISPER);
+		pm.registerPacketParser(instance, "parseDestroyChannel", PacketHeader.DESTROYING_CHANNEL);
 		
 		pm.registerPacketSender(instance, "createChangeModule", PacketHeader.CHANGE_MODULE);
 		pm.registerPacketSender(instance, "createWhisper", PacketHeader.WHISPER);
+		pm.registerPacketSender(instance, "createDestroyChannel", PacketHeader.DESTROYING_CHANNEL);
 	}
 	
 	/**
@@ -118,5 +121,24 @@ public class ConnectionPackets implements PacketListener {
 		buffer.putInt(peer.getID());
 		buffer.putInt(len);
 		NetUtils.putString(buffer, msg);
+	}
+	
+	/**
+	 * Parses a destroy channel packet, should not be called outside of the packet manager
+	 * @param header the header
+	 * @param buffer the buffer
+	 * @return a DestroyingChannelPacket
+	 */
+	public ParsedPacket parseDestroyChannel(PacketHeader header, ByteBuffer buffer) {
+		return new DestroyingChannelPacket();
+	}
+	
+	/**
+	 * Writes a destroy channel packet, should not be called outside of the packet manager
+	 * @param buffer the buffer
+	 * @param arguments none
+	 */
+	public void createDestroyChannel(ByteBuffer buffer, Object... arguments) {
+		
 	}
 }

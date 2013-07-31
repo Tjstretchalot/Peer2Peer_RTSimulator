@@ -456,9 +456,10 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 			
 			ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.WHISPER);
 			PacketManager.instance.send(PacketHeader.WHISPER, buffer, peer, msg); // This is located in ConnectionPackets or whatever
+			buffer.flip();
 			try {
 				cHandler.getNetState().getLocalNetModule().ensureDirectConnection(peer);
-				cHandler.getNetState().getLocalNetModule().sendDirectly(peer);
+				cHandler.getNetState().getLocalNetModule().sendDirectly(peer, buffer);
 				cHandler.getNetState().getLocalNetModule().destroyUnnecessaryConnection(peer);
 			} catch (IOException e) {
 				e.printStackTrace();

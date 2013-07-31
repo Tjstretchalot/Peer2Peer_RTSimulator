@@ -1,9 +1,18 @@
 package me.timothy.dcrts.net;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
+import me.timothy.dcrts.net.packets.DirectConnectionPacket;
+import me.timothy.dcrts.packet.PacketHandler;
 import me.timothy.dcrts.packet.PacketHeader;
+import me.timothy.dcrts.packet.PacketListener;
 import me.timothy.dcrts.packet.PacketManager;
 import me.timothy.dcrts.packet.ParsedPacket;
 import me.timothy.dcrts.peer.Peer;
@@ -16,6 +25,126 @@ import me.timothy.dcrts.utils.NetUtils;
  * @author Timothy
  */
 public abstract class NetModule extends Module {
+	protected ServerSocketChannel directConnectionServerSocket;
+	
+	private DirectConnectionAcceptionThread dcat;
+	private DirectConnectionMonitorThread dcmt;
+	private class DirectConnectionAcceptionThread extends Thread {
+		@Override
+		public void run() {
+			while(true) {
+				try {
+					SocketChannel channel = directConnectionServerSocket.accept();
+					onConnectionAcception(channel);
+				} catch (IOException e) {
+					if(e.getMessage().toLowerCase().contains("interrupt"))
+						break;
+					e.printStackTrace();
+				}
+				
+			}
+		}
+	}
+	
+	private class DirectConnectionMonitorThread extends Thread implements PacketListener {
+		List<Peer> monitoring;
+		
+		DirectConnectionMonitorThread() {
+			monitoring = Collections.synchronizedList(new ArrayList<Peer>());
+		}
+		
+		@Override
+		public void run() {
+			List<Peer> toRem = new ArrayList<>();
+			ByteBuffer buffer = ByteBuffer.allocate(PacketHeader.getLargestPacketSize());
+			while(true) {
+				synchronized(monitoring) { 
+					for(Peer peer : monitoring) {
+						if(!peer.metaData.containsKey("directConnection")) {
+							toRem.add(peer);
+							continue;
+						}
+						
+						SocketChannel sc = (SocketChannel) peer.metaData.get("directConnection");
+						int read;
+						try {
+							read = sc.read(buffer);
+						} catch (IOException e) {
+							e.printStackTrace();
+							toRem.add(peer);
+							continue;
+						}
+						if(read == 0)
+							break;
+						
+						buffer.flip();
+						
+						int headerInt = buffer.getInt();
+						PacketHeader header = PacketHeader.byValue(headerInt);
+						ParsedPacket parsed = PacketManager.instance.parse(header, buffer);
+						
+						ParsedPacket wrapped = new DirectConnectionPacket(parsed);
+						PacketManager.instance.broadcastPacket(peer, wrapped);
+						
+						buffer.clear();
+					}
+					monitoring.removeAll(toRem);
+				}
+				try {
+					Thread.sleep(2);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
+		}
+		
+		@SuppressWarnings("unused")
+		@PacketHandler(header=PacketHeader.DIRECT_PACKET, priority=1)
+		public void onDestroyConnection(Peer peer, ParsedPacket packet) {
+			DirectConnectionPacket dcp = (DirectConnectionPacket) packet;
+			if(dcp.getPacket().getHeader() != PacketHeader.DESTROYING_CHANNEL)
+				return;
+			
+			stopMonitoring(peer);
+		}
+	}
+	
+	protected NetModule() {
+		
+	}
+	
+	@Override
+	public void onActivate() {
+		try {
+			directConnectionServerSocket = ServerSocketChannel.open();
+			directConnectionServerSocket.bind(new InetSocketAddress(NetUtils.DIRECT_PORT));
+			directConnectionServerSocket.configureBlocking(true);
+			
+			dcat = new DirectConnectionAcceptionThread();
+			dcat.start();
+			
+			dcmt = new DirectConnectionMonitorThread();
+			dcmt.start();
+			
+			pManager.registerClass(dcmt);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	@Override
+	public void onDeactivate() {
+		dcat.interrupt();
+		dcmt.interrupt();
+		try {
+			directConnectionServerSocket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		pManager.unregisterClass(dcmt);
+	}
+	
 	/**
 	 * Sends the buffer to everyone
 	 * @param buffer the buffer
@@ -29,28 +158,53 @@ public abstract class NetModule extends Module {
 	 * if that peer is connected logically. This may be used to send secure
 	 * messages.
 	 * 
-	 * The peer then exchanges encryption keys to be utilized until the next call
-	 * to destroyUnnecessaryConnections() or destroyUnnecessaryConnection#Peer
+	 * 
+	 * Encryption is up to the implementation
 	 * @param peer the peer 
 	 */
-	public abstract void ensureDirectConnection(Peer peer) throws IOException;
+	public void ensureDirectConnection(Peer peer) throws IOException {
+		if(getMonitoringChannel(peer) != null)
+			return;
+		
+		InetSocketAddress addr = (InetSocketAddress) netState.getSocketAddressOf(peer);
+		InetSocketAddress conAddr = new InetSocketAddress(addr.getHostString(), NetUtils.DIRECT_PORT);
+		SocketChannel channel = SocketChannel.open(conAddr);
+		channel.configureBlocking(true);
+		ByteBuffer buffer = ByteBuffer.allocate(4);
+		buffer.putInt(netState.getLocalPeer().getID());
+		buffer.flip();
+		channel.write(buffer);
+		
+		buffer.clear();
+		monitorDirectConnection(peer, channel);
+	}
 	/**
 	 * Sends a message directly to the specified peer. This must be 
 	 * preceded with ensureDirectConnection to avoid errors.
-	 * 
-	 * This will be encrypted
-	 * 
 	 * @param peer the peer
 	 */
-	public abstract void sendDirectly(Peer peer) throws IOException;
+	public void sendDirectly(Peer peer, ByteBuffer buffer) throws IOException {
+		SocketChannel channel = getMonitoringChannel(peer);
+		if(channel == null)
+			throw new IllegalArgumentException("Call ensureDirectConnection first! (No direct channel with peer has been created)");
+		
+		channel.write(buffer);
+	}
 	
 	/**
-	 * Destroys any unnecessary connections caused from ensureDirectConnection, and 
-	 * 'kills' encryption keys.
+	 * Destroys all unnecessary connections caused from ensureDirectConnection
 	 * 
 	 * @throws IOException if an exception occurs
 	 */
-	public abstract void destroyUnnecessaryConnections() throws IOException;
+	public void destroyUnnecessaryConnections() throws IOException {
+		List<Peer> connected = gameState.getConnectedPeers();
+		
+		synchronized(connected) {
+			for(Peer peer : connected) {
+				destroyUnnecessaryConnection(peer);
+			}
+		}
+	}
 	
 	/**
 	 * Destroys a specific unnecessary connection caused from ensureDirectConnection,
@@ -59,7 +213,62 @@ public abstract class NetModule extends Module {
 	 * @param peer the peer
 	 * @throws IOException if an exception occurs
 	 */
-	public abstract void destroyUnnecessaryConnection(Peer peer) throws IOException;
+	public void destroyUnnecessaryConnection(Peer peer) throws IOException {
+		SocketChannel channel = getMonitoringChannel(peer);
+		if(channel == null)
+			return;
+		
+		ByteBuffer buffer = ByteBuffer.allocate(PacketHeader.DESTROYING_CHANNEL.getMaxPacketSize());
+		buffer.putInt(PacketHeader.DESTROYING_CHANNEL.getValue());
+		pManager.send(PacketHeader.DESTROYING_CHANNEL, buffer);
+		buffer.flip();
+		
+		channel.write(buffer);
+		stopMonitoring(peer);
+	}
+	
+	/**
+	 * Called when a direct connection is accepted
+	 * @param channel
+	 * @throws IOException
+	 */
+	protected void onConnectionAcception(SocketChannel channel)
+			throws IOException {
+		channel.configureBlocking(true);
+		
+		ByteBuffer buffer = ByteBuffer.allocate(4);
+		
+		List<Peer> peers = gameState.getConnectedPeers();
+
+		Peer expected = null;
+		synchronized(peers) {
+			for(Peer peer : peers) { 
+				if(NetUtils.addressMatches((InetSocketAddress) netState.getSocketAddressOf(peer), (InetSocketAddress) channel.getRemoteAddress())) {
+					expected = peer;
+					break;
+				}
+			}
+		}
+		
+		if(expected == null) {
+			System.err.println("Direct connection was sent, but does not contain an expected address. Closing as quick as possible to prevent DDoS");
+			channel.close();
+			return;
+		}
+		channel.read(buffer);
+		buffer.flip();
+		
+		int peerId = buffer.getInt();
+		
+		if(peerId != expected.getID()) {
+			System.err.println("Direct connection was sent, but id does not match the expected id. Closing as quickly as possible.");
+			channel.close();
+			return;
+		}
+		
+		System.out.println("Peer directly connected: " + expected.getName());
+		monitorDirectConnection(expected, channel);
+	}
 	
 	/**
 	 * 
@@ -77,5 +286,24 @@ public abstract class NetModule extends Module {
 			ParsedPacket parsed = PacketManager.instance.parse(header, buffer);
 			PacketManager.instance.broadcastPacket(peer, parsed);
 		}
+	}
+	
+	protected void monitorDirectConnection(Peer peer, SocketChannel channel) {
+		try {
+			channel.configureBlocking(false);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+		peer.metaData.put("directConnection", channel);
+		dcmt.monitoring.add(peer);
+	}
+	
+	protected void stopMonitoring(Peer peer) {
+		peer.metaData.remove("directConnection");
+	}
+	
+	protected SocketChannel getMonitoringChannel(Peer peer) {
+		return peer.metaData.containsKey("directConnection") ? (SocketChannel) peer.metaData.get("directConnection") : null;
 	}
 }

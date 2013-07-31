@@ -9,6 +9,7 @@ package me.timothy.dcrts.packet;
  * @author Timothy
  */
 public enum PacketHeader {
+	DIRECT_PACKET(-3, 0), // this header solely means this packet came from a direct connection
 	ANY(-2, 0), // This header solely means you want to respond to all headers, and is *never* sent over the net
 	ERROR(-1, 256), // if you get this, you should probably just jump off a roof.
 	
@@ -33,8 +34,9 @@ public enum PacketHeader {
 	ALL_CHAT(15, 512),
 	WHISPER(16, 512), 
 	
-	CHANGE_MODULE(17, 128) // marks a change in a peers module
+	CHANGE_MODULE(17, 128), // marks a change in a peers module
 	
+	DESTROYING_CHANNEL(200, 4) // used to signify this channel is being destroyed (e.g. direct connections)
 	;
 	private static int largest = -1;
 	

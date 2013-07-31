@@ -3,6 +3,8 @@ package me.timothy.dcrts.utils;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,6 +17,7 @@ public class NetUtils {
 	public static final int RESERVED_ID = Integer.MAX_VALUE;
 	public static final int INIT_ID = 1337;
 	public static final int PORT = 25994;
+	public static final int DIRECT_PORT = PORT + 1;
 
 	/**
 	 * Reads a string from the specified buffer of lengthCh length
@@ -70,5 +73,9 @@ public class NetUtils {
 	    };
 	 
 		return md.digest();
+	}
+	
+	public static boolean addressMatches(InetSocketAddress addr1, InetSocketAddress addr2) {
+		return addr1.getHostName().equals(addr2.getHostName());
 	}
 }

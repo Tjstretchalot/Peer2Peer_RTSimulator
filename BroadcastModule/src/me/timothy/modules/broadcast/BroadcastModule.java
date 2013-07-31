@@ -54,6 +54,7 @@ public class BroadcastModule extends NetModule {
 	
 	@Override
 	public void onActivate() {
+		super.onActivate();
 		System.out.println("BroadcastModule activated!");
 		readThread = new ReadThread(this, gameState, netState);
 		readThread.start();
@@ -61,6 +62,7 @@ public class BroadcastModule extends NetModule {
 
 	@Override
 	public void onDeactivate() {
+		super.onDeactivate();
 		System.out.println("BroadcastModule deactivated!");
 		readThread.stopReading();
 	}
@@ -142,29 +144,5 @@ public class BroadcastModule extends NetModule {
 			if(netState.getSocketChannelOf(peer) != null)
 				peer.metaData.put("directlyConnected", true);
 		}
-	}
-
-	@Override
-	public void ensureDirectConnection(Peer peer) throws IOException {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void sendDirectly(Peer peer) throws IOException {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void destroyUnnecessaryConnections() throws IOException {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void destroyUnnecessaryConnection(Peer peer) throws IOException {
-		// TODO Auto-generated method stub
-		
 	}
 }

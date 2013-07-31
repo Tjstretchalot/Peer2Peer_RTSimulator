@@ -432,10 +432,8 @@ public class ConnectedLobby extends Lobby implements PacketListener {
 								buffer.clear();
 
 								for(int j = 0; j < con + 1; j++) {
-									System.out.println("Here1");
 									if(connectedPeers.get(j).getID() == id) {
-										System.out.println("Here2");
-										InetSocketAddress expected = snip.getAddress(id); // TODO compare expected HOST NAME to end HOST NAME
+										InetSocketAddress expected = snip.getAddress(id); 
 										if(!expected.getHostName().equals(((InetSocketAddress) sc.getRemoteAddress()).getHostName())) {
 											System.err.println("Expected address and remote address don't match (" + id + ", " + 
 													expected.getHostName() + " vs " + 

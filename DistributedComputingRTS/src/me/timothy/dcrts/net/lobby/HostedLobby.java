@@ -34,7 +34,7 @@ import me.timothy.dcrts.state.ConnectionState;
 import me.timothy.dcrts.utils.NetUtils;
 
 public class HostedLobby extends Lobby implements PacketListener {
-	public static final int COUNTDOWN_SECONDS = 5;
+	public static final int COUNTDOWN_SECONDS = 3;
 	
 	private ServerSocketChannel servChannel;
 	private List<SocketChannel> connections;
@@ -128,7 +128,7 @@ public class HostedLobby extends Lobby implements PacketListener {
 	}
 	
 	public HostedLobby() {
-		idCounter = NetUtils.INIT_ID;
+		idCounter = NetUtils.INIT_ID + 1;
 	}
 	
 	@Override
@@ -214,7 +214,7 @@ public class HostedLobby extends Lobby implements PacketListener {
 			connListener = new ConnectionListener();
 			connChanReader = new ConnectionChannelReader();
 			
-			localPeer = new LocalPeer("Host", 0);
+			localPeer = new LocalPeer("Host", NetUtils.INIT_ID);
 			settings = new GameSettings();
 
 			PacketManager.instance.registerClass(this);

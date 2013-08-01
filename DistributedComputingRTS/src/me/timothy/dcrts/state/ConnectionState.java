@@ -23,6 +23,8 @@ import me.timothy.dcrts.net.event.CEventHandler;
 import me.timothy.dcrts.net.event.CEventManager;
 import me.timothy.dcrts.net.event.EventType;
 import me.timothy.dcrts.net.module.ModuleHandler;
+import me.timothy.dcrts.net.packets.DirectConnectionPacket;
+import me.timothy.dcrts.net.packets.WhisperPacket;
 import me.timothy.dcrts.packet.PacketHandler;
 import me.timothy.dcrts.packet.PacketHeader;
 import me.timothy.dcrts.packet.PacketListener;
@@ -454,7 +456,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 			
 			String msg = JOptionPane.showInputDialog("What do you want to send to " + peer.getName() + "?");
 			
-			ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.WHISPER);
+			ByteBuffer buffer = NetUtils.createBufferNoID(PacketHeader.WHISPER);
 			PacketManager.instance.send(PacketHeader.WHISPER, buffer, peer, msg); // This is located in ConnectionPackets or whatever
 			buffer.flip();
 			try {
@@ -478,4 +480,24 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 		}
 		recalculateNodeGraph();
 	}
+
+	@PacketHandler(header=PacketHeader.DIRECT_PACKET, priority=10) 
+	public void onWhispered(final Peer peer, ParsedPacket wrappedPacket) { // monitor
+		DirectConnectionPacket dcp = (DirectConnectionPacket) wrappedPacket;
+		ParsedPacket realPacket = dcp.getPacket();
+		if(realPacket.getHeader() != PacketHeader.WHISPER)
+			return;
+		
+		final WhisperPacket whispPacket = (WhisperPacket) realPacket;
+		System.out.println(peer.getName() + " says... '" + whispPacket.getMessage() + "'");
+		new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				JOptionPane.showMessageDialog(null, whispPacket.getMessage(), peer.getName() + " says...", JOptionPane.INFORMATION_MESSAGE);
+			}
+			
+		}).start();
+	}
+	
 }

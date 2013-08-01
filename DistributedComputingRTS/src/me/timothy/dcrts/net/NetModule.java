@@ -3,6 +3,7 @@ package me.timothy.dcrts.net;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public abstract class NetModule extends Module {
 					SocketChannel channel = directConnectionServerSocket.accept();
 					onConnectionAcception(channel);
 				} catch (IOException e) {
-					if(e.getMessage().toLowerCase().contains("interrupt"))
+					if(e instanceof ClosedByInterruptException)
 						break;
 					e.printStackTrace();
 				}
@@ -80,6 +81,7 @@ public abstract class NetModule extends Module {
 						buffer.flip();
 						
 						int headerInt = buffer.getInt();
+						System.out.println("headerInt: " + headerInt);
 						PacketHeader header = PacketHeader.byValue(headerInt);
 						ParsedPacket parsed = PacketManager.instance.parse(header, buffer);
 						
@@ -116,8 +118,11 @@ public abstract class NetModule extends Module {
 	@Override
 	public void onActivate() {
 		try {
+			int id = gameState.getLocalPeer().getID();
+			int port = NetUtils.getDirectPort(id);
+			System.out.println("NetModule Direct-Connection Port: " + port + " (ID=" + id + ")");
 			directConnectionServerSocket = ServerSocketChannel.open();
-			directConnectionServerSocket.bind(new InetSocketAddress(NetUtils.DIRECT_PORT));
+			directConnectionServerSocket.bind(new InetSocketAddress(port));
 			directConnectionServerSocket.configureBlocking(true);
 			
 			dcat = new DirectConnectionAcceptionThread();
@@ -167,7 +172,8 @@ public abstract class NetModule extends Module {
 			return;
 		
 		InetSocketAddress addr = (InetSocketAddress) netState.getSocketAddressOf(peer);
-		InetSocketAddress conAddr = new InetSocketAddress(addr.getHostString(), NetUtils.DIRECT_PORT);
+		int port = NetUtils.getDirectPort(peer.getID());
+		InetSocketAddress conAddr = new InetSocketAddress(addr.getHostString(), port);
 		SocketChannel channel = SocketChannel.open(conAddr);
 		channel.configureBlocking(true);
 		ByteBuffer buffer = ByteBuffer.allocate(4);
@@ -239,11 +245,14 @@ public abstract class NetModule extends Module {
 		ByteBuffer buffer = ByteBuffer.allocate(4);
 		
 		List<Peer> peers = gameState.getConnectedPeers();
-
+		InetSocketAddress channelAddr = (InetSocketAddress) channel.getRemoteAddress();
+		InetSocketAddress peerAddr;
+		
 		Peer expected = null;
 		synchronized(peers) {
 			for(Peer peer : peers) { 
-				if(NetUtils.addressMatches((InetSocketAddress) netState.getSocketAddressOf(peer), (InetSocketAddress) channel.getRemoteAddress())) {
+				peerAddr = (InetSocketAddress) netState.getSocketAddressOf(peer);
+				if(NetUtils.addressMatches(peerAddr, channelAddr)) {
 					expected = peer;
 					break;
 				}
@@ -261,9 +270,31 @@ public abstract class NetModule extends Module {
 		int peerId = buffer.getInt();
 		
 		if(peerId != expected.getID()) {
-			System.err.println("Direct connection was sent, but id does not match the expected id. Closing as quickly as possible.");
-			channel.close();
-			return;
+			System.err.println("Direct connection was sent, but id does not match the expected id.");
+			System.err.println("ID: " + peerId + ", Expected ID: " + expected.getID());
+			System.err.println("--");
+			System.err.println("Checking if that peer's address also matches (LAN connections can do this)");
+			Peer peer = NetUtils.getPeerByID(peers, peerId);
+			boolean killConnection = false;
+			if(peer == null) {
+				System.err.println("No peer found by that id, killing connection");
+				killConnection = true;
+			}
+			else {
+				peerAddr = (InetSocketAddress) netState.getSocketAddressOf(peer);
+				if(NetUtils.addressMatches(peerAddr, channelAddr)) {
+					System.err.println("Address matches, allowing the connection");
+				}else {
+					System.err.println("Address does NOT match, disallowing connection");
+					System.err.println("  (That ID's Addr: '" + peerAddr.getHostName() + "' vs this connections '" + channelAddr.getHostName() + "'");
+					killConnection = true;
+				}
+			}
+			System.err.flush();
+			if(killConnection) {
+				channel.close();
+				return;
+			}
 		}
 		
 		System.out.println("Peer directly connected: " + expected.getName());

@@ -23,8 +23,10 @@ import me.timothy.dcrts.utils.ErrorUtils;
 public class ListenerModule extends NetModule {
 	private Peer reallyConnected;
 	private ReadThread readThread;
+	
 	@Override
 	public void onActivate() {
+		super.onActivate();
 		if(netState == null || gameState == null || gameState.getConnectedPeers() == null) {
 			ErrorUtils.nullPointer(new String[] { "netState", "gameState", "gameState.getConnectedPeers()" }, netState, 
 					gameState, (gameState != null ? gameState.getConnectedPeers() : null));
@@ -40,6 +42,7 @@ public class ListenerModule extends NetModule {
 
 	@Override
 	public void onDeactivate() {
+		super.onDeactivate();
 		readThread.stopGracefully();
 
 		pManager.unregisterClass(this);

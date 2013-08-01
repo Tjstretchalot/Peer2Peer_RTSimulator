@@ -16,7 +16,7 @@ public class NetUtils {
 	public static final int RESERVED_ID = Integer.MAX_VALUE;
 	public static final int INIT_ID = 1337;
 	public static final int PORT = 25994;
-	public static final int DIRECT_PORT = PORT + 1;
+	private static final int DIRECT_PORT = PORT - 1;
 
 	/**
 	 * Reads a string from the specified buffer of lengthCh length
@@ -76,6 +76,24 @@ public class NetUtils {
 	}
 	
 	public static boolean addressMatches(InetSocketAddress addr1, InetSocketAddress addr2) {
-		return addr1.getHostName().equals(addr2.getHostName());
+		String hName1 = addr1.getHostName();
+		String hName2 = addr2.getHostName();
+		if(hName1.equals("127.0.0.1"))
+			hName1 = "localhost";
+		if(hName2.equals("127.0.0.1"))
+			hName2 = "localhost";
+		
+		return hName1.equals(hName2);
+	}
+	
+	public static int getDirectPort(int peerId) {
+		return (DIRECT_PORT - 1) - (peerId - INIT_ID);
+	}
+
+	public static ByteBuffer createBufferNoID(PacketHeader header) {
+		ByteBuffer buffer = ByteBuffer.allocate(header.getMaxPacketSize());
+		buffer.putInt(header.getValue());
+		
+		return buffer;
 	}
 }

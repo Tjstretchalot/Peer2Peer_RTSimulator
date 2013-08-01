@@ -48,6 +48,7 @@ public class DCRTSEntry extends StateBasedGame {
 			appgc.setDisplayMode(640, 480, false);
 			appgc.setTargetFrameRate(120);
 //			appgc.setAlwaysRender(true);
+//			appgc.setUpdateOnlyWhenVisible(false);
 			appgc.setShowFPS(false);
 			appgc.start();
 		} catch (SlickException ex) {

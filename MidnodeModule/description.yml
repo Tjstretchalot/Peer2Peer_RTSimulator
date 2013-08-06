@@ -1,0 +1,11 @@
+main: me.timothy.modules.midnode.MidnodeModule
+type: net
+name: MidnodeModule
+cost: 1
+description: |
+  An 'in-between' node, which will have peers above it as
+  well as below it. Short of direct connection, this node
+  will relay information to the broadcast module (if it 
+  comes from below them), and relay information down(if
+  it comes from above them). This peer may have, at most, one
+  peer directly above it. 

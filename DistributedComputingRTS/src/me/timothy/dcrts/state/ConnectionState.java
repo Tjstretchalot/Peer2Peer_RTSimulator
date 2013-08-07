@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -120,16 +119,39 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 		
 		
 		public boolean isEnabled(String str, Map<String, Object> meta) {
+			String netType = cHandler.getNetState().getNetTypeOf(thePeer).getName();
 			switch(str) {
 			case "Change Module":
 				return true;
+			case "Move":
+				List<Peer> peers = cHandler.getGameState().getConnectedPeers();
+				if(netType.equals("BroadcastModule")) {
+					boolean foundOtherBroadcastModule = false;
+					synchronized(peers) {
+						for(Peer p : peers) {
+							if(!p.equals(thePeer) && cHandler.getNetState().getNetTypeOf(p).getName().equals("BroadcastModule")) {
+								foundOtherBroadcastModule = true;
+								break;
+							}
+						}
+					}
+					return foundOtherBroadcastModule;
+				}
+				return true;
 			case "Promote":
-				return !cHandler.getNetState().getNetTypeOf(thePeer).getName().equals("BroadcastModule");
+				return !netType.equals("BroadcastModule");
 			case "Demote":
-				return !cHandler.getNetState().getNetTypeOf(thePeer).getName().equals("ListenerModule");
+				return !netType.equals("ListenerModule");
 			case "Whisper":
 				return !cHandler.getGameState().getLocalPeer().equals(thePeer);
 			default:
+				peers = cHandler.getGameState().getConnectedPeers();
+				synchronized(peers) {
+					for(Peer p : peers) {
+						if(p.getName().equals(str))
+							return true;
+					}
+				}
 				return false;
 			}
 		}
@@ -147,14 +169,15 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 	protected static final List<Object> DROPDOWN_CHOICES;
 	
 	static {
-		DROPDOWN_CHOICES = Arrays.asList(new Object[] {
-				Arrays.asList(
-						"Change Module",
-						"Promote",
-						"Demote"
-				),
-				"Whisper"
-			});
+		List<String> l1 = new ArrayList<>();
+		l1.add("Change Module");
+		l1.add("Promote");
+		l1.add("Demote");
+		DROPDOWN_CHOICES = new ArrayList<>();
+		
+		DROPDOWN_CHOICES.add(l1);
+		DROPDOWN_CHOICES.add("Move");
+		DROPDOWN_CHOICES.add("Whisper");
 	}
 	
 	protected ConnectingHandler cHandler;
@@ -214,7 +237,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 					Point effLoc = (Point) mouseHoveringOn.point.clone();
 					effLoc.x += 200;
 					effLoc.y += 120;
-					dropdownMenu = new DropdownMenu(DROPDOWN_CHOICES, mouseHoveringOn, 
+					dropdownMenu = new DropdownMenu(adjustChoices(DROPDOWN_CHOICES, dropdownOn.thePeer), mouseHoveringOn, 
 							effLoc);
 				}
 				lastPress = System.currentTimeMillis();
@@ -225,7 +248,7 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 			dropdownMenu.update(cont, delta);
 		}
 		
-		if(System.currentTimeMillis() - lastPress > GUtils.CLICK_DELAY) {
+		if((dropdownMenu == null || !dropdownMenu.containsMouse()) && System.currentTimeMillis() - lastPress > GUtils.CLICK_DELAY) {
 			if(Mouse.isButtonDown(0)) {
 				CEventManager.instance.broadcast(EventType.MENUS_DESTROYED);
 			}
@@ -238,11 +261,71 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 		}
 	}
 
-	protected List<Boolean> decideDropdownChoices(GraphPoint mouseHoveringOn) {
-		List<Boolean> result = new ArrayList<>();
-		result.add(true);
-		result.add(true);
+	private List<Object> adjustChoices(List<Object> dropdownChoices,
+			Peer peer) {
+		String netType = cHandler.getNetState().getNetTypeOf(peer).getClass().getSimpleName(); 
+		
+		List<Object> result = new ArrayList<Object>(dropdownChoices.size());
+		for(Object o : dropdownChoices) {
+			result.add(o);
+		}
+		
+		recursiveReplace(result, peer, netType);
+		recursivePrint(result, "");
+		System.out.println();
 		return result;
+	}
+	
+	@SuppressWarnings("unchecked")
+	private void recursiveReplace(List<Object> result, Peer peer, String netType) {
+		for(Object o : result) {
+			if(o instanceof String) {
+				String str = (String) o;
+				if(str.equals("Move")) {
+					System.out.println("Replacing " + str + " with array");
+					List<String> choices = new ArrayList<>();
+					choices.add(str);
+					addPlayerNames(choices, peer);
+					result.set(result.indexOf(o), choices);
+				}
+			}else if(o instanceof List<?>) {
+				recursiveReplace((List<Object>) o, peer, netType);
+			}
+		}
+	}
+	private void recursivePrint(List<?> arr, String ind) {
+		System.out.println(ind + "{");
+		for(Object o : arr) {
+			if(o instanceof List<?>) {
+				recursivePrint((List<?>) o, ind + "  ");
+				if(!(o.equals(arr.get(arr.size() - 1)))) {
+					System.out.print(",");
+				}
+				System.out.println();
+			} else {
+				System.out.print(ind + "  " + "'" + o.toString() + "' (" + o.getClass().getSimpleName() + ")");
+				if(!o.equals(arr.get(arr.size() - 1)))
+					System.out.print(",");
+				System.out.println();
+			}
+		}
+		System.out.print(ind + "}");
+	}
+
+	private void addPlayerNames(List<String> choices, Peer peer) {
+		List<Peer> peers = cHandler.getGameState().getConnectedPeers();
+		
+		synchronized(peers) {
+			if(!peer.equals(cHandler.getGameState().getLocalPeer())) {
+				choices.add(cHandler.getGameState().getLocalPeer().getName());
+			}
+			
+			for(Peer p : peers) {
+				if(p.equals(peer))
+					continue;
+				choices.add(p.getName());
+			}
+		}
 	}
 
 	@Override
@@ -404,47 +487,23 @@ public class ConnectionState extends BasicGameState implements PacketListener {
 		
 		GraphPoint gp = dropdownOn;
 		Peer peer = gp.thePeer;
-		
+		String netType = cHandler.getNetState().getNetTypeOf(peer).getClass().getSimpleName(); 
 		switch(optionStr) {
 		case "Promote":
-			
-			if(cHandler.getNetState().getNetTypeOf(peer).getClass().getSimpleName().equals("ListenerModule")) {
-				ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.CHANGE_MODULE);
-				try {
-					PacketManager.instance.send(PacketHeader.CHANGE_MODULE, buffer, peer, true, "BroadcastModule");
-					buffer.flip();
-					cHandler.getNetState().getLocalNetModule().sendData(buffer);
-					
-					
-					NetModule netModule = ModuleHandler.getBroadcastModule();
-					if(peer.equals(cHandler.getNetState().getLocalPeer())) {
-						netModule.setResources(PacketManager.instance, cHandler.getNetState(), cHandler.getGameState());
-					}
-					cHandler.getNetState().setNetModuleOf(peer, netModule);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+			if(netType.equals("ListenerModule") || netType.equals("MidnodeModule")) {
+				if(peer.equals(cHandler.getNetState().getLocalPeer()))
+					NetUtils.clearNetMeta(cHandler.getGameState().getConnectedPeers());
+				NetUtils.changeModule(cHandler, peer, "BroadcastModule");
 			}
 
 			recalculateNodeGraph();
 			break;
 			
 		case "Demote":
-			if(cHandler.getNetState().getNetTypeOf(peer).getName().equals("BroadcastModule")) {
-				ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.CHANGE_MODULE);
-				try {
-					PacketManager.instance.send(PacketHeader.CHANGE_MODULE, buffer, peer, true, "ListenerModule");
-					buffer.flip();
-					cHandler.getNetState().getLocalNetModule().sendData(buffer);
-					
-					NetModule netModule = ModuleHandler.getListenerModule();
-					if(peer.equals(cHandler.getNetState().getLocalPeer())) {
-						netModule.setResources(PacketManager.instance, cHandler.getNetState(), cHandler.getGameState());
-					}
-					cHandler.getNetState().setNetModuleOf(peer, netModule);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+			if(netType.equals("BroadcastModule") || netType.equals("MidnodeModule")) {
+				if(peer.equals(cHandler.getNetState().getLocalPeer()))
+					NetUtils.clearNetMeta(cHandler.getGameState().getConnectedPeers());
+				NetUtils.changeModule(cHandler, peer, "ListenerModule");
 			}
 
 			recalculateNodeGraph();

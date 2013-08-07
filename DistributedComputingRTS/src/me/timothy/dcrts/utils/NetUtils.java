@@ -9,7 +9,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
+import me.timothy.dcrts.net.NetModule;
+import me.timothy.dcrts.net.connect.ConnectingHandler;
+import me.timothy.dcrts.net.module.ModuleHandler;
 import me.timothy.dcrts.packet.PacketHeader;
+import me.timothy.dcrts.packet.PacketManager;
 import me.timothy.dcrts.peer.Peer;
 
 public class NetUtils {
@@ -95,5 +99,34 @@ public class NetUtils {
 		buffer.putInt(header.getValue());
 		
 		return buffer;
+	}
+
+	public static void changeModule(ConnectingHandler cHandler, Peer peer, String moduleName) {
+		ByteBuffer buffer = NetUtils.createBuffer(cHandler.getGameState().getLocalPeer().getID(), PacketHeader.CHANGE_MODULE);
+		try {
+			PacketManager.instance.send(PacketHeader.CHANGE_MODULE, buffer, peer, true, "BroadcastModule");
+			buffer.flip();
+			cHandler.getNetState().getLocalNetModule().sendData(buffer);
+			
+			
+			NetModule netModule = ModuleHandler.getBroadcastModule();
+			if(peer.equals(cHandler.getNetState().getLocalPeer())) {
+				netModule.setResources(PacketManager.instance, cHandler.getNetState(), cHandler.getGameState());
+			}
+			cHandler.getNetState().setNetModuleOf(peer, netModule);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public static void clearNetMeta(List<Peer> peers) {
+		synchronized(peers) {
+			for(Peer p : peers) {
+				p.metaData.put("directlyConnected", null);
+				p.metaData.put("parentNode", null);
+				p.metaData.put("abovePeer", null);
+				p.metaData.put("belowPeer", null);
+			}
+		}
 	}
 }

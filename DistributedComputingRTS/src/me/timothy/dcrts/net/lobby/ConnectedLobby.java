@@ -184,7 +184,7 @@ public class ConnectedLobby extends Lobby implements PacketListener {
 			ErrorUtils.nullPointer(new String[] { "address" }, address);
 
 		destroying = false;
-		localPeer = new LocalPeer("Client", NetUtils.RESERVED_ID);
+		localPeer = new LocalPeer("Client " + (System.currentTimeMillis() % 1000), NetUtils.RESERVED_ID);
 		try {
 			connection = SocketChannel.open(address);
 			connection.configureBlocking(false);
@@ -198,7 +198,7 @@ public class ConnectedLobby extends Lobby implements PacketListener {
 		incReaderThread.start();
 
 		ByteBuffer buffer = NetUtils.createBuffer(localPeer.getID(), PacketHeader.CONNECT);
-		PacketManager.instance.send(PacketHeader.CONNECT, buffer, false, false, "Client");
+		PacketManager.instance.send(PacketHeader.CONNECT, buffer, false, false, localPeer.getName());
 		buffer.flip();
 		send(buffer);
 	}

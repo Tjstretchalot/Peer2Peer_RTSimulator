@@ -67,6 +67,10 @@ public abstract class Peer {
 		this.ready = ready;
 	}
 	
+	@Override
+	public String toString() {
+		return getName();
+	}
 	
 	@Override
 	public int hashCode() {

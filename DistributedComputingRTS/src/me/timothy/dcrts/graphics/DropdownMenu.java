@@ -364,4 +364,9 @@ public class DropdownMenu {
 			return false;
 		return true;
 	}
+
+	public boolean containsMouse() {
+		return Mouse.getX() > location.getX() && Mouse.getX() < location.getX() + getWidth() &&
+				Mouse.getY() > location.getY() && Mouse.getY() < location.getY() + getHeight();
+	}
 }
